@@ -4,6 +4,8 @@
 #include <sstream>
 #include <vector>
 #include <bitset>
+#include <algorithm>
+#include <ranges>
 
 struct BingoNumber
 {
@@ -20,6 +22,8 @@ struct BingoBoard
 
     bool m_won = false;
     bool m_just_won = false;
+
+    int id;
 
     BingoNumber &get(int row, int col) { return numbers[row][col]; }
     void set(int row, int col, int number) { numbers[row][col] = BingoNumber(number); }
@@ -88,64 +92,79 @@ int main()
     std::fstream fs("input", std::fstream::in);
     std::string line;
 
-    std::vector<int> drawn_numbers;
-    std::vector<BingoBoard> boards;
-
     std::getline(fs, line);
     auto line_stream = std::stringstream(line);
 
     // extract draws
-    std::string string_draw;
-    while (std::getline(line_stream, string_draw, ','))
+    std::vector<int> drawn_numbers;
     {
-        drawn_numbers.push_back(std::stoi(string_draw));
+        std::string string_draw;
+        while (std::getline(line_stream, string_draw, ','))
+        {
+            drawn_numbers.push_back(std::stoi(string_draw));
+        }
     }
 
     std::getline(fs, line);
 
-    BingoBoard bg;
-    int row = 0;
-    int col = 0;
-
-    while (std::getline(fs, line))
+    std::vector<BingoBoard> boards;
     {
-        col = 0;
 
-        if (line == "")
-        {
-            boards.push_back(bg);
-            bg = BingoBoard();
-            row = 0;
-        }
+        BingoBoard bg;
+        bg.id = boards.size() + 1;
+        int row = 0;
+        int col = 0;
 
-        else
+        while (std::getline(fs, line))
         {
-            line_stream = std::stringstream(line);
-            while (std::getline(line_stream, line, ' '))
+            col = 0;
+
+            if (line == "")
             {
-                if (line != "")
-                {
-                    bg.set(row, col, std::stoi(line));
-                    line_stream >> std::ws;
-
-                    col++;
-                }
+                boards.push_back(bg);
+                bg = BingoBoard();
+                bg.id = boards.size() + 1;
+                row = 0;
             }
-            row++;
-        }
-    }
-    boards.push_back(bg);
 
-    bool winner_found = false;
-    for (auto draw = drawn_numbers.begin(); draw != drawn_numbers.end() && !winner_found; draw++)
-    {
-        for (auto bingoboard = boards.begin(); bingoboard != boards.end() && !winner_found; bingoboard++)
-        {
-            bingoboard->mark_number(*draw);
-            if (bingoboard->just_won())
+            else
             {
-                std::cout << "winner found with a score of: " << bingoboard->get_score() * (*draw) << std::endl;
-                winner_found = true;
+                line_stream = std::stringstream(line);
+                while (std::getline(line_stream, line, ' '))
+                {
+                    if (line != "")
+                    {
+                        bg.set(row, col, std::stoi(line));
+                        line_stream >> std::ws;
+
+                        col++;
+                    }
+                }
+                row++;
+            }
+        }
+        boards.push_back(bg);
+    }
+
+    int winning_boards_count = 0;
+
+    for (auto draw : drawn_numbers)
+    {
+        for (auto &bingoboard : boards)
+        {
+            if (!bingoboard.already_won())
+            {
+                bingoboard.mark_number(draw);
+                if (bingoboard.just_won())
+                {
+                    std::cout << "board " << bingoboard.id << " just won." << std::endl;
+
+                    winning_boards_count++;
+                    if (winning_boards_count == boards.size())
+                    {
+                        std::cout << "last winner found with a score of " << bingoboard.get_score() * draw << std::endl;
+                    }
+                }
             }
         }
     }
