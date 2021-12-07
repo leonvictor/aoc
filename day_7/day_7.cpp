@@ -5,9 +5,23 @@
 #include <vector>
 #include <algorithm>
 
+int sign_fn(int x)
+{
+    if (x > 0)
+    {
+        return 1;
+    }
+    else if (x < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
 struct Crabs
 {
     std::vector<int> crabs_per_position;
+    float mean_position = -1.0f;
+    int num_crabs = -1;
 
     void add_crab(int position)
     {
@@ -45,7 +59,45 @@ struct Crabs
         }
         return cost;
     }
+
+    // optimized part 2
+    int cost_using_mean(int target_pos)
+    {
+        auto sum = 0;
+        for (int i = 0; i < crabs_per_position.size(); i++)
+        {
+            sum += sign_fn(crabs_per_position[i] - target_pos);
+        }
+        auto cost = get_mean_pos() - (1 / 2) * (sum / get_num_crabs());
+        return cost;
+    }
+
+    int get_num_crabs()
+    {
+        if (num_crabs > 0)
+            return num_crabs;
+
+        get_mean_pos();
+        return num_crabs;
+    }
+
+    float get_mean_pos()
+    {
+        if (mean_position < -1.0f)
+            return mean_position;
+
+        num_crabs = 0;
+        int sum = 0;
+        for (int i = 0; i < crabs_per_position.size(); i++)
+        {
+            num_crabs += crabs_per_position[i];
+            sum += (crabs_per_position[i] * i);
+        }
+        mean_position = sum / num_crabs;
+        return mean_position;
+    }
 };
+
 int main()
 {
     std::fstream fs("input", std::fstream::in);
@@ -57,11 +109,10 @@ int main()
         crabs.add_crab(std::stoi(line));
     }
 
-    // this is a naïve search method
     std::vector<int> costs;
-    for (int i = 0; i < crabs.crabs_per_position.size(); i++)
+    // mean method : https://old.reddit.com/r/adventofcode/comments/rawxad/2021_day_7_part_2_i_wrote_a_paper_on_todays/
+    for (int i = (int)(crabs.get_mean_pos() - (1 / 2)); i <= (int)(crabs.get_mean_pos() + (1 / 2)); i++)
     {
-        // int c = crabs.simple_cost_to(i);
         int c = crabs.accurate_cost_to(i);
         costs.push_back(c);
     }
