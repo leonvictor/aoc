@@ -5,9 +5,6 @@
 #include <vector>
 #include <algorithm>
 
-const int MAP_WIDTH = 10;
-const int MAP_HEIGHT = 10;
-
 struct Pos
 {
     int x;
@@ -25,12 +22,6 @@ struct Pos
         y -= other.y;
     }
 };
-
-std::ostream &operator<<(std::ostream &os, Pos const &pos)
-{
-    os << pos.x << "," << pos.y;
-    return os;
-}
 
 Pos operator+(Pos &rh, Pos &lh)
 {
@@ -60,7 +51,7 @@ struct VentLine
                 atomics.push_back({sign, 0});
             }
         }
-        if (disp.x == 0)
+        else if (disp.x == 0)
         {
             int sign = disp.y / abs(disp.y);
             for (int i = 0; i < abs(disp.y); i++)
@@ -68,30 +59,28 @@ struct VentLine
                 atomics.push_back({0, sign});
             }
         }
+        else // diagonal (part 2)
+        {
+            int sign_x = disp.x / abs(disp.x);
+            int sign_y = disp.y / abs(disp.y);
+            for (int i = 0; i < abs(disp.x); i++)
+            {
+                atomics.push_back({sign_x, sign_y});
+            }
+        }
 
         return atomics;
     }
 };
 
-std::ostream &operator<<(std::ostream &os, VentLine const &vent_line)
-{
-    os << vent_line.start << " -> " << vent_line.end;
-    return os;
-}
-
 struct Map
 {
-    int flags[MAP_WIDTH][MAP_HEIGHT];
+    std::vector<std::vector<uint16_t>> flags;
+    uint16_t m_width, m_height;
 
-    Map()
+    Map(uint16_t width, uint16_t height) : m_width(width), m_height(height)
     {
-        for (int x = 0; x < MAP_WIDTH; x++)
-        {
-            for (int y = 0; y < MAP_HEIGHT; y++)
-            {
-                flags[x][y] = 0;
-            }
-        }
+        flags = std::vector<std::vector<uint16_t>>(m_width, std::vector<uint16_t>(m_height, 0));
     }
 
     void flag_line(VentLine &vent_line)
@@ -99,7 +88,6 @@ struct Map
         auto displacements = vent_line.get_atomic_displacements();
         if (displacements.size() == 0)
         {
-            std::cout << "ignored (no displacement)" << std::endl;
             return;
         }
 
@@ -119,9 +107,9 @@ struct Map
     int count_overlaps()
     {
         int count = 0;
-        for (int x = 0; x < MAP_WIDTH; x++)
+        for (int x = 0; x < m_width; x++)
         {
-            for (int y = 0; y < MAP_HEIGHT; y++)
+            for (int y = 0; y < m_height; y++)
             {
                 if (flags[x][y] > 1)
                 {
@@ -130,25 +118,6 @@ struct Map
             }
         }
         return count;
-    }
-
-    void debug_draw()
-    {
-        for (int x = 0; x < MAP_WIDTH; x++)
-        {
-            for (int y = 0; y < MAP_HEIGHT; y++)
-            {
-                if (flags[x][y] > 0)
-                {
-                    std::cout << flags[x][y] << " ";
-                }
-                else
-                {
-                    std::cout << ". ";
-                }
-            }
-            std::cout << std::endl;
-        }
     }
 };
 
@@ -167,7 +136,7 @@ int main()
 {
     std::vector<VentLine> vent_lines;
 
-    std::fstream fs("input_example", std::fstream::in);
+    std::fstream fs("input", std::fstream::in);
     std::string line;
 
     auto line_stream = std::stringstream(line);
@@ -189,19 +158,12 @@ int main()
         vent_lines.push_back({start_pos, end_pos});
     }
 
-    Map map;
-    map.debug_draw();
+    Map map(max_x + 1, max_y + 1);
     for (auto &vent_line : vent_lines)
     {
-        std::cout << std::endl
-                  << vent_line
-                  << std::endl;
-
         map.flag_line(vent_line);
-        // map.debug_draw();
     }
 
-    map.debug_draw();
     std::cout << map.count_overlaps() << " overlaps.";
 
     return 0;
