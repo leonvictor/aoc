@@ -34,5 +34,10 @@
 # VSCode files
 .vscode
 
-# Personal input files
+# Input files
 input
+example_input
+
+# Debugger crap
+*.ilk
+*.pdb
