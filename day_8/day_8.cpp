@@ -1,78 +1,125 @@
-#include <string>
-#include <iostream>
+#include <bitset>
+#include <array>
 #include <fstream>
+#include <iostream>
+#include <string>
 #include <sstream>
 #include <vector>
 #include <map>
 
-struct Entry
-{
-    std::vector<std::string> signal_patterns;
-    std::vector<std::string> digit_values;
-};
-
 int main()
 {
-    std::fstream fs("example_input", std::fstream::in);
+    std::fstream fs("input", std::fstream::in);
     std::string line;
 
-    std::vector<Entry> entries;
+    int count = 0;
+    int total_sum = 0;
     while (std::getline(fs, line))
     {
-        Entry entry;
+        std::vector<std::bitset<7>> patterns;  // received input
+        std::array<std::bitset<7>, 10> digits; // actual digits
+        std::map<unsigned long, uint8_t> mapping;
 
+        std::string pattern_string;
         auto line_stream = std::stringstream(line);
-        while (std::getline(line_stream, line, ' ') && line != "|")
+        while (std::getline(line_stream, pattern_string, ' ') && pattern_string != "|")
         {
-            entry.signal_patterns.push_back(line);
+            std::bitset<7> bitset;
+            for (auto segment : pattern_string)
+            {
+                bitset.set(segment - 'a', true);
+            }
+            patterns.push_back(bitset);
         }
-        while (std::getline(line_stream, line, ' '))
+
+        const auto set_pattern = [&](std::bitset<7> pattern, uint8_t digit)
         {
-            entry.digit_values.push_back(line);
+            digits[digit] = pattern;
+            mapping.emplace(pattern.to_ulong(), digit);
+        };
+
+        // start by mapping the known digits
+        for (auto pattern : patterns)
+        {
+            switch (pattern.count())
+            {
+            case 2:
+                set_pattern(pattern, 1);
+                break;
+            case 3:
+                set_pattern(pattern, 7);
+                break;
+            case 4:
+                set_pattern(pattern, 4);
+                break;
+            case 7:
+                set_pattern(pattern, 8);
+                break;
+            default:
+                break;
+            }
         }
-        entries.push_back(entry);
+
+        // then the more complex ones
+        for (auto pattern : patterns)
+        {
+            switch (pattern.count())
+            {
+            case 5:
+            {
+
+                if ((pattern & digits[1]) == digits[1])
+                {
+                    set_pattern(pattern, 3);
+                }
+                else if ((pattern | digits[4]) == digits[8])
+                {
+                    set_pattern(pattern, 2);
+                }
+                else
+                {
+                    set_pattern(pattern, 5);
+                }
+                break;
+            }
+            case 6:
+            {
+                if ((pattern & digits[4]) == digits[4])
+                {
+                    set_pattern(pattern, 9);
+                }
+                else if ((pattern & digits[1]) == digits[1])
+                {
+                    set_pattern(pattern, 0);
+                }
+                else
+                {
+                    set_pattern(pattern, 6);
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
+
+        std::string result = "";
+        while (std::getline(line_stream, pattern_string, ' '))
+        {
+            std::bitset<7> pattern;
+            for (auto segment : pattern_string)
+            {
+                pattern.set(segment - 'a', true);
+            }
+
+            auto digit = mapping[pattern.to_ulong()];
+            result += std::to_string(digit);
+        }
+
+        std::cout << result << std::endl;
+        total_sum += std::stoi(result);
     }
 
-    // populate the dictionnary
-    std::map<char, std::vector<char>> candidates;
-    for (char symbol = 'a'; symbol != 'h'; symbol++)
-    {
-        std::vector<char> tmp = {'a', 'b', 'c', 'd', 'e', 'f', 'g'};
-        candidates.emplace(symbol, tmp);
-    }
-
-    int count = 0;
-    for (auto &entry : entries)
-    {
-        std::string result = "0000";
-        int digit_counter = 0;
-
-        // part 1: count unique instances
-        for (auto &digit : entry.digit_values)
-        {
-            if (digit.size() == 2) // 1
-            {
-                count++;
-            }
-            if (digit.size() == 4) // 4
-            {
-                count++;
-            }
-            if (digit.size() == 7) // 8
-            {
-                count++;
-            }
-            if (digit.size() == 3) // 7
-            {
-                count++;
-            }
-            else
-            {
-            }
-            digit_counter++;
-        }
-    }
-
-    std::cout << count << " instances of digits that use a unique number of segments.";
+    std::cout << "total sum: " << total_sum << std::endl;
     return 0;
 }
