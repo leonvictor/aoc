@@ -13,20 +13,21 @@
 #include <functional>
 #include <assert.h>
 #include <algorithm>
+#include <numeric>
+#include <limits>
 
 using literal_t = uint64_t;
 using bit_t = int;
 
 literal_t bits2int(std::vector<bit_t>::iterator &it, uint64_t count)
 {
-    literal_t out = 0ll;
-    for (uint64_t i = 0ll; i < count; ++i)
+    std::string str;
+    for (uint64_t i = std::numeric_limits<literal_t>::min(); i < count; ++i)
     {
-        if (*it)
-            out += (uint64_t)1 << (count - (uint64_t)1 - i);
+        str += *it ? '1' : '0';
         ++it;
     }
-    return out;
+    return std::stoull(str, nullptr, 2);
 }
 
 literal_t bits2int(std::vector<bit_t> &bits)
@@ -37,131 +38,92 @@ literal_t bits2int(std::vector<bit_t> &bits)
 
 literal_t product_operator(std::vector<literal_t> &literals)
 {
-    literal_t result = 1;
-    std::cout << "prod(";
-    for (auto lit : literals)
-    {
-        if (result > UINT64_MAX / lit)
-        {
-            std::cout << "Aie" << std::endl;
-        }
-        result *= lit;
-        std::cout << lit << ", ";
-    }
-    std::cout << ") = " << result << std::endl;
-    return result;
+    return std::accumulate(literals.begin(), literals.end(), 1ll, std::multiplies<>());
 }
 
 literal_t sum_operator(std::vector<literal_t> &literals)
 {
-    std::cout << "sum(";
-    literal_t result = 0ll;
-    // return std::accumulate(literals.begin(), literals.end(), 0ll);
-    for (auto lit : literals)
-    {
-        if (result > UINT64_MAX - lit)
-        {
-            std::cout << "Aie" << std::endl;
-        }
-        result += lit;
-        std::cout << lit << ", ";
-    }
-    std::cout << ") = " << result << std::endl;
-    return result;
+    return std::accumulate(literals.begin(), literals.end(), std::numeric_limits<literal_t>::min(), std::plus<>());
 }
 
 literal_t min_operator(std::vector<literal_t> &literals)
 {
-    std::cout << "min(";
-    literal_t result = UINT64_MAX;
+    literal_t result = std::numeric_limits<literal_t>::max();
     for (auto lit : literals)
     {
         result = result < lit ? result : lit;
-        // result = std::min(result, lit);
-        std::cout << lit << ", ";
     }
-    std::cout << ") = " << result << std::endl;
     return result;
 }
 
 literal_t max_operator(std::vector<literal_t> &literals)
 {
-    literal_t result = 0;
-    std::cout << "max(";
+    literal_t result = std::numeric_limits<literal_t>::min();
     for (auto lit : literals)
     {
         result = result > lit ? result : lit;
-        std::cout << lit << ", ";
     }
-    std::cout << ") = " << result << std::endl;
     return result;
 }
 
 literal_t greater_than_operator(std::vector<literal_t> &literals)
 {
-    assert(literals.size() == 2);
-    std::cout << literals[0] << ">" << literals[1] << "=" << ((literal_t)literals[0] > literals[1]) << std::endl;
-    return (literal_t)literals[0] > literals[1];
+    return literals[0] > literals[1];
 }
 
 literal_t less_than_operator(std::vector<literal_t> &literals)
 {
-    assert(literals.size() == 2);
-    std::cout << literals[0] << "<" << literals[1] << "=" << ((literal_t)literals[0] < literals[1]) << std::endl;
-    return (literal_t)literals[0] < literals[1];
+    return literals[0] < literals[1];
 }
 
 literal_t equals_operator(std::vector<literal_t> &literals)
 {
-    assert(literals.size() == 2);
-    std::cout << literals[0] << "==" << literals[1] << " =" << ((literal_t)literals[0] == literals[1]) << std::endl;
-    return (literal_t)literals[0] == literals[1];
+    return literals[0] == literals[1];
 }
 
 class Packet
 {
 private:
-    literal_t m_version;
-    literal_t m_type_id;
+    uint8_t m_version;
+    uint8_t m_type_id;
     literal_t m_value;
-    literal_t m_version_sum = 0ll;
+    uint32_t m_version_sum = std::numeric_limits<literal_t>::min();
 
     literal_t m_bit_size;
 
     std::vector<bit_t>::iterator m_it;
 
     using operator_func = std::function<literal_t(std::vector<literal_t> &)>;
-    std::array<operator_func, 8> operators =
+    std::unordered_map<uint8_t, operator_func> operators =
         {
-            &sum_operator,
-            &product_operator,
-            &min_operator,
-            &max_operator,
-            nullptr, // should be nullptr
-            &greater_than_operator,
-            &less_than_operator,
-            &equals_operator,
+            {0, &sum_operator},
+            {1, &product_operator},
+            {2, &min_operator},
+            {3, &max_operator},
+            {5, &greater_than_operator},
+            {6, &less_than_operator},
+            {7, &equals_operator},
     };
 
 public:
     Packet(std::vector<bit_t>::iterator start) : m_bit_size(0), m_it(start)
     {
-        m_version = read_next_bits(3);
+        m_version = (uint8_t)read_raw_value(3);
         m_version_sum += m_version;
-        m_type_id = read_next_bits(3);
+        m_type_id = (uint8_t)read_raw_value(3);
 
         if (m_type_id == 4)
         {
             m_value = read_literal_value();
         }
         else
-        { // operators
+        {
             m_bit_size++;
             std::vector<literal_t> subpackets;
             if (*m_it)
             {
                 ++m_it;
-                auto subpacket_count = read_next_bits(11);
+                auto subpacket_count = read_raw_value(11);
                 for (uint64_t i = 0; i < subpacket_count; ++i)
                 {
                     Packet packet(m_it);
@@ -174,24 +136,27 @@ public:
             else
             {
                 ++m_it;
-                auto read_end = m_bit_size + read_next_bits(15);
-                while (m_bit_size < read_end)
+                auto sub_length = read_raw_value(15);
+                auto bit_count = std::numeric_limits<literal_t>::min();
+                while (bit_count < sub_length)
                 {
                     Packet packet(m_it);
                     m_bit_size += packet.get_size();
-                    m_it = packet.end();
+                    bit_count += packet.get_size();
+                    m_it += packet.get_size();
                     m_version_sum += packet.get_version_sum();
                     subpackets.push_back(packet.get_value());
                 }
             }
+
             m_value = operators[m_type_id](subpackets);
         };
     }
 
     literal_t get_value() { return m_value; }
     literal_t get_size() { return m_bit_size; }
-    literal_t get_version() { return m_version; }
-    literal_t get_version_sum() { return m_version_sum; }
+    uint8_t get_version() { return m_version; }
+    uint32_t get_version_sum() { return m_version_sum; }
     std::vector<bit_t>::iterator end() { return m_it; }
 
     literal_t read_literal_value()
@@ -213,43 +178,10 @@ public:
         return bits2int(literal);
     }
 
-    literal_t read_next_bits(uint64_t count)
+    literal_t read_raw_value(literal_t count)
     {
         m_bit_size += count;
         return bits2int(m_it, count);
-    }
-};
-
-class BITSReader
-{
-public:
-    std::vector<bit_t> bits;
-    std::vector<bit_t>::iterator m_reader;
-    literal_t version_count = 0ll;
-
-public:
-    literal_t size = 0ll;
-    BITSReader(std::string hex)
-    {
-        bits.reserve(hex.size() * 4);
-        for (auto &character : hex)
-        {
-            for (uint8_t i = 4; i != 0; --i)
-            {
-                auto c = character >= 'A' ? character - 'A' + ':' : character;
-                bit_t b = (c & (1 << (i - 1))) >> (i - 1);
-                bits.push_back(b);
-            }
-        }
-    }
-
-    literal_t read()
-    {
-        m_reader = bits.begin();
-        auto outer_packet = Packet(m_reader);
-        size = outer_packet.get_size();
-        std::cout << "version sum: " << outer_packet.get_version_sum() << std::endl;
-        return outer_packet.get_value();
     }
 };
 
@@ -259,15 +191,22 @@ int main()
 
     std::fstream fs(input_path, std::fstream::in);
     std::string hex;
-
+    std::vector<bit_t> bits;
     std::getline(fs, hex);
-    BITSReader reader(hex);
-    auto value = reader.read();
 
-    std::cout << "packet value: " << value << std::endl;
-    std::cout << reader.size << " bits read over " << reader.bits.size() << std::endl;
-    // not : 569548927
-    // not : 569512283 (too low)
-    // not : 739303887024 (too low)
+    bits.reserve(hex.size() * 4);
+    for (auto &character : hex)
+    {
+        for (uint8_t i = 4; i != 0; --i)
+        {
+            auto c = character >= 'A' ? character - 'A' + ':' : character;
+            bit_t b = (c & (1 << (i - 1))) >> (i - 1);
+            bits.push_back(b);
+        }
+    }
+    auto outer_packet = Packet(bits.begin());
+
+    std::cout << "packet value: " << outer_packet.get_value() << std::endl;
+    std::cout << "version sum: " << outer_packet.get_version_sum() << std::endl;
     return 0;
 };
